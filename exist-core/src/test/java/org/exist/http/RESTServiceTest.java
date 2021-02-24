@@ -403,7 +403,7 @@ try {
 
             connect.connect();
             final int r = connect.getResponseCode();
-            assertEquals("Server returned response code " + r, HttpStatus.BAD_REQUEST_400, r);
+            assertEquals("Server returned response code " + r, HttpStatus.METHOD_NOT_ALLOWED_405, r);
         } finally {
             connect.disconnect();
         }
