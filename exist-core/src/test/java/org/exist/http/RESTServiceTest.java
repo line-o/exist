@@ -65,8 +65,8 @@ import static org.junit.Assume.assumeThat;
 
 /**
  * A test case for accessing a remote server via REST-Style Web API.
- * @author <a href="mailto:pierrick.brihaye@free.fr">wolf
- * @author Pierrick Brihaye</a>
+ * @author wolf
+ * @author <a href="mailto:pierrick.brihaye@free.fr">Pierrick Brihaye</a>
  */
 //@RunWith(ParallelRunner.class)    // TODO(AR) when running in parallel a deadlock is encountered in eXist-db... this needs to be resolved!
 public class RESTServiceTest {
@@ -278,17 +278,17 @@ public class RESTServiceTest {
 
         String path = getCollectionUri() + "/requestwithpath.xq";
         final HttpURLConnection connect = preparePost("boo", path);
-try {
-        connect.connect();
-        final int r = connect.getResponseCode();
-        assertEquals("Server returned response code " + r, HttpStatus.OK_200, r);
-        final String response = readResponse(connect.getInputStream());
-        final String pathInfo = response.substring("pathInfo=".length(), response.indexOf("servletPath=")-2);
-        final String servletPath = response.substring(response.indexOf("servletPath=") + "servletPath=".length(), response.lastIndexOf("\r\n"));
+        try {
+            connect.connect();
+            final int r = connect.getResponseCode();
+            assertEquals("Server returned response code " + r, HttpStatus.OK_200, r);
+            final String response = readResponse(connect.getInputStream());
+            final String pathInfo = response.substring("pathInfo=".length(), response.indexOf("servletPath=")-2);
+            final String servletPath = response.substring(response.indexOf("servletPath=") + "servletPath=".length(), response.lastIndexOf("\r\n"));
 
-        //check the responses
-        assertEquals("XQuery servletPath is: \"" + servletPath + "\" expected: \"/db/test/requestwithpath.xq\"", "/db/test/requestwithpath.xq", servletPath);
-        assertEquals("XQuery pathInfo is: \"" + pathInfo + "\" expected: \"\"", "", pathInfo);
+            //check the responses
+            assertEquals("XQuery servletPath is: \"" + servletPath + "\" expected: \"/db/test/requestwithpath.xq\"", "/db/test/requestwithpath.xq", servletPath);
+            assertEquals("XQuery pathInfo is: \"" + pathInfo + "\" expected: \"\"", "", pathInfo);
         } finally {
             connect.disconnect();
         }
