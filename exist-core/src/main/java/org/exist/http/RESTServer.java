@@ -1025,24 +1025,31 @@ public class RESTServer {
      * @throws BadRequestException if a bad request is made
      * @throws PermissionDeniedException if the request has insufficient permissions
      * @throws NotFoundException if the request resource cannot be found
+     * @throws MethodNotAllowedException if the request targets a collection
      * @throws IOException if an I/O error occurs
      */
-    public void doPut(final DBBroker broker, final Txn transaction, final XmldbURI path,
+    public void doPut(final DBBroker broker, final Txn transaction, final String path,
             final HttpServletRequest request, final HttpServletResponse response)
             throws BadRequestException, PermissionDeniedException, IOException,
-            NotFoundException {
+            NotFoundException, MethodNotAllowedException {
+        final XmldbURI dbpath = XmldbURI.createInternal(path);
+        try (final Collection collection = broker.getCollection(dbpath)) {
+            if (collection != null) {
+                throw new MethodNotAllowedException("A PUT request is not allowed against a plain collection path.");
+            }
+        }
 
-        if (checkForXQueryTarget(broker, transaction, path, request, response)) {
+        if (checkForXQueryTarget(broker, transaction, dbpath, request, response)) {
             return;
         }
 
         // fourth, process the request
 
-        final XmldbURI docUri = path.lastSegment();
-        final XmldbURI collUri = path.removeLastSegment();
+        final XmldbURI docUri = dbpath.lastSegment();
+        final XmldbURI collUri = dbpath.removeLastSegment();
 
         if (docUri == null || collUri == null) {
-            throw new BadRequestException("Bad path: " + path);
+            throw new BadRequestException("Bad path: " + dbpath);
         }
         // TODO : use getOrCreateCollection() right now ?
         try(final ManagedCollectionLock managedCollectionLock = broker.getBrokerPool().getLockManager().acquireCollectionWriteLock(collUri)) {
@@ -1123,15 +1130,20 @@ public class RESTServer {
      *
      * @throws BadRequestException if a bad request is made
      * @throws PermissionDeniedException if the request has insufficient permissions
-     * @throws NotFoundException if the request resource cannot be found
+     * @throws MethodNotAllowedException if the request does target something else than an executable
      * @throws IOException if an I/O error occurs
      */
-    public void doPatch(final DBBroker broker, final Txn transaction, final XmldbURI path,
+    public void doPatch(final DBBroker broker, final Txn transaction, final String path,
                       final HttpServletRequest request, final HttpServletResponse response)
-            throws BadRequestException, PermissionDeniedException, IOException,
-            NotFoundException, MethodNotAllowedException {
+            throws BadRequestException, PermissionDeniedException, IOException, MethodNotAllowedException {
+        final XmldbURI dbpath = XmldbURI.createInternal(path);
+        try (final Collection collection = broker.getCollection(dbpath)) {
+            if (collection != null) {
+                throw new MethodNotAllowedException("A PATCH request is not allowed against a plain collection path.");
+            }
+        }
 
-        if (checkForXQueryTarget(broker, transaction, path, request, response)) {
+        if (checkForXQueryTarget(broker, transaction, dbpath, request, response)) {
             return;
         }
 

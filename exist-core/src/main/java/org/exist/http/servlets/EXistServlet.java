@@ -46,6 +46,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.text.MessageFormat;
 import java.util.Optional;
 
 /**
@@ -107,148 +108,6 @@ public class EXistServlet extends AbstractExistHttpServlet {
         return defaultValue;
     }
 
-    @Override
-    protected void doPut(final HttpServletRequest request, final HttpServletResponse response)
-            throws ServletException, IOException {
-        // first, adjust the path
-        String path = adjustPath(request);
-
-        // second, perform descriptor actions
-        final Descriptor descriptor = Descriptor.getDescriptorSingleton();
-        if (descriptor != null) {
-            // TODO: figure out a way to log PUT requests with
-            // HttpServletRequestWrapper and
-            // Descriptor.doLogRequestInReplayLog()
-
-            // map's the path if a mapping is specified in the descriptor
-            path = descriptor.mapPath(path);
-        }
-
-        // third, authenticate the user
-        final Subject user = authenticate(request, response);
-        if (user == null) {
-            // You now get a HTTP Authentication challenge if there is no user
-            return;
-        }
-
-        // fourth, process the request
-        try (final DBBroker broker = getPool().get(Optional.of(user));
-             final Txn transaction = getPool().getTransactionManager().beginTransaction()) {
-
-            final XmldbURI dbpath = XmldbURI.createInternal(path);
-            try (final Collection collection = broker.getCollection(dbpath)) {
-                if (collection != null) {
-                    transaction.abort();
-                    response.sendError(HttpServletResponse.SC_BAD_REQUEST, "A PUT request is not allowed against a plain collection path.");
-                    return;
-                }
-            }
-
-            try {
-                srvREST.doPut(broker, transaction, dbpath, request, response);
-                transaction.commit();
-
-            } catch (final Throwable t) {
-                transaction.abort();
-                throw t;
-            }
-
-        } catch (final BadRequestException e) {
-            if (response.isCommitted()) {
-                throw new ServletException(e.getMessage(), e);
-            }
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
-        } catch (final PermissionDeniedException e) {
-            // If the current user is the Default User and they do not have permission
-            // then send a challenge request to prompt the client for a username/password.
-            // Else return a FORBIDDEN Error
-            if (user.equals(getDefaultUser())) {
-                getAuthenticator().sendChallenge(request, response);
-            } else {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN, e.getMessage());
-            }
-        } catch (final EXistException e) {
-            if (response.isCommitted()) {
-                throw new ServletException(e.getMessage(), e);
-            }
-            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
-        } catch (final Throwable e) {
-            LOG.error(e);
-            throw new ServletException("An unknown error occurred: " + e.getMessage(), e);
-        }
-    }
-
-    protected void doPatch(final HttpServletRequest request, final HttpServletResponse response)
-            throws ServletException, IOException {
-        // first, adjust the path
-        String path = adjustPath(request);
-
-        // second, perform descriptor actions
-        final Descriptor descriptor = Descriptor.getDescriptorSingleton();
-        if (descriptor != null) {
-            // TODO: figure out a way to log PATCH requests with
-            // HttpServletRequestWrapper and
-            // Descriptor.doLogRequestInReplayLog()
-
-            // map's the path if a mapping is specified in the descriptor
-            path = descriptor.mapPath(path);
-        }
-
-        // third, authenticate the user
-        final Subject user = authenticate(request, response);
-        if (user == null) {
-            // You now get a HTTP Authentication challenge if there is no user
-            return;
-        }
-
-        // fourth, process the request
-        try (final DBBroker broker = getPool().get(Optional.of(user));
-             final Txn transaction = getPool().getTransactionManager().beginTransaction()) {
-
-            final XmldbURI dbpath = XmldbURI.createInternal(path);
-            try (final Collection collection = broker.getCollection(dbpath)) {
-                if (collection != null) {
-                    transaction.abort();
-                    response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED, "A PATCH request is not allowed against a plain collection path.");
-                    return;
-                }
-            }
-
-            try {
-                srvREST.doPatch(broker, transaction, dbpath, request, response);
-                transaction.commit();
-
-            } catch (final Throwable t) {
-                transaction.abort();
-                throw t;
-            }
-        } catch (final MethodNotAllowedException e) {
-            response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED, e.getMessage());
-        } catch (final BadRequestException e) {
-            if (response.isCommitted()) {
-                throw new ServletException(e.getMessage(), e);
-            }
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
-        } catch (final PermissionDeniedException e) {
-            // If the current user is the Default User and they do not have permission
-            // then send a challenge request to prompt the client for a username/password.
-            // Else return a FORBIDDEN Error
-            if (user.equals(getDefaultUser())) {
-                getAuthenticator().sendChallenge(request, response);
-            } else {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN, e.getMessage());
-            }
-        } catch (final EXistException e) {
-            if (response.isCommitted()) {
-                throw new ServletException(e.getMessage(), e);
-            }
-            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
-        } catch (final Throwable e) {
-            LOG.error(e);
-            throw new ServletException("An unknown error occurred: " + e.getMessage(), e);
-        }
-    }
-
     /**
      * Returns an adjusted the URL path of the request.
      *
@@ -293,21 +152,23 @@ public class EXistServlet extends AbstractExistHttpServlet {
     }
 
     @Override
-    protected void doGet(final HttpServletRequest request, final HttpServletResponse response)
-            throws ServletException, IOException {
+    protected void service(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        final String method = request.getMethod();
 
         // first, adjust the path
         String path = adjustPath(request);
 
-        // second, perform descriptor actions
-        final Descriptor descriptor = Descriptor.getDescriptorSingleton();
-        if (descriptor != null && !descriptor.requestsFiltered()) {
-            // logs the request if specified in the descriptor
-            descriptor.doLogRequestInReplayLog(request);
-
-            // map's the path if a mapping is specified in the descriptor
-            path = descriptor.mapPath(path);
-        }
+//        // second, perform descriptor actions
+//        final Descriptor descriptor = Descriptor.getDescriptorSingleton();
+//        if (descriptor != null && !descriptor.requestsFiltered()) {
+//            // logs the request if specified in the descriptor
+//            if (method.equals("GET") || method.equals("POST") || method.equals("DELETE")) {
+//                descriptor.doLogRequestInReplayLog(request);
+//            }
+//
+//            // map's the path if a mapping is specified in the descriptor
+//            path = descriptor.mapPath(path);
+//        }
 
         // third, authenticate the user
         final Subject user = authenticate(request, response);
@@ -318,10 +179,38 @@ public class EXistServlet extends AbstractExistHttpServlet {
 
         // fourth, process the request
         try (final DBBroker broker = getPool().get(Optional.of(user));
-             final Txn transaction = getPool().getTransactionManager().beginTransaction()) {
-
+            final Txn transaction = getPool().getTransactionManager().beginTransaction()) {
             try {
-                srvREST.doGet(broker, transaction, request, response, path);
+                switch (method) {
+                    case "GET":
+                        srvREST.doGet(broker, transaction, request, response, path);
+                        break;
+                    case "HEAD":
+                        srvREST.doHead(broker, transaction, request, response, path);
+                        break;
+                    case "POST":
+                        srvREST.doPost(broker, transaction, request, response, path);
+                        break;
+                    case "PATCH":
+                        srvREST.doPatch(broker, transaction, path, request, response);
+                        break;
+                    case "PUT":
+                        srvREST.doPut(broker, transaction, path, request, response);
+                        break;
+                    case "DELETE":
+                        srvREST.doDelete(broker, transaction, path, request, response);
+                        break;
+                    case "OPTIONS":
+                        this.doOptions(request, response);
+                        break;
+    //                    case "TRACE":
+    //                    case "CONNECT":
+                    default:
+                        String errMsg = "http.method_not_implemented: %s";
+                        Object[] errArgs = new Object[]{method};
+                        errMsg = MessageFormat.format(errMsg, errArgs);
+                        throw new MethodNotAllowedException(errMsg);
+                }
                 transaction.commit();
 
             } catch (final Throwable t) {
@@ -349,242 +238,24 @@ public class EXistServlet extends AbstractExistHttpServlet {
                 throw new ServletException(e.getMessage());
             }
             response.sendError(HttpServletResponse.SC_NOT_FOUND, e.getMessage());
-
+        } catch (final MethodNotAllowedException e) {
+            response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED, e.getMessage());
         } catch (final EXistException e) {
             if (response.isCommitted()) {
                 throw new ServletException(e.getMessage(), e);
             }
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
         } catch (final EOFException ee) {
-            getLog().error("GET Connection has been interrupted", ee);
-            throw new ServletException("GET Connection has been interrupted", ee);
+            String errMsg = "%s Connection has been interrupted";
+            Object[] errArgs = new Object[]{method};
+            errMsg = MessageFormat.format(errMsg, errArgs);
+
+            LOG.error(errMsg, ee);
+            throw new ServletException(errMsg, ee);
         } catch (final Throwable e) {
-            getLog().error(e.getMessage(), e);
+            LOG.error(e.getMessage(), e);
             throw new ServletException("An error occurred: " + e.getMessage(), e);
         }
-    }
 
-    @Override
-    protected void doHead(final HttpServletRequest request, final HttpServletResponse response)
-            throws ServletException, IOException {
-        // first, adjust the path
-        String path = adjustPath(request);
-
-        // second, perform descriptor actions
-        final Descriptor descriptor = Descriptor.getDescriptorSingleton();
-        if (descriptor != null && !descriptor.requestsFiltered()) {
-            // logs the request if specified in the descriptor
-            descriptor.doLogRequestInReplayLog(request);
-
-            // map's the path if a mapping is specified in the descriptor
-            path = descriptor.mapPath(path);
-        }
-
-        // third, authenticate the user
-        final Subject user = authenticate(request, response);
-        if (user == null) {
-            // You now get a HTTP Authentication challenge if there is no user
-            return;
-        }
-
-        // fourth, process the request
-        try (final DBBroker broker = getPool().get(Optional.of(user));
-             final Txn transaction = getPool().getTransactionManager().beginTransaction()) {
-
-            try {
-                srvREST.doHead(broker, transaction, request, response, path);
-                transaction.commit();
-
-            } catch (final Throwable t) {
-                transaction.abort();
-                throw t;
-            }
-
-        } catch (final BadRequestException e) {
-            if (response.isCommitted()) {
-                throw new ServletException(e.getMessage(), e);
-            }
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
-
-        } catch (final PermissionDeniedException e) {
-            // If the current user is the Default User and they do not have permission
-            // then send a challenge request to prompt the client for a username/password.
-            // Else return a FORBIDDEN Error
-            if (user.equals(getDefaultUser())) {
-                getAuthenticator().sendChallenge(request, response);
-            } else {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN, e.getMessage());
-            }
-        } catch (final NotFoundException e) {
-            if (response.isCommitted()) {
-                throw new ServletException(e.getMessage(), e);
-            }
-            response.sendError(HttpServletResponse.SC_NOT_FOUND, e.getMessage());
-        } catch (final EXistException e) {
-            if (response.isCommitted()) {
-                throw new ServletException(e.getMessage(), e);
-            }
-            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
-        } catch (final Throwable e) {
-            getLog().error(e);
-            throw new ServletException("An unknown error occurred: " + e.getMessage(), e);
-        }
-    }
-
-    @Override
-    protected void doDelete(final HttpServletRequest request, final HttpServletResponse response) throws ServletException, IOException {
-        // first, adjust the path
-        String path = adjustPath(request);
-
-        // second, perform descriptor actions
-        final Descriptor descriptor = Descriptor.getDescriptorSingleton();
-        if (descriptor != null) {
-            // map's the path if a mapping is specified in the descriptor
-            path = descriptor.mapPath(path);
-        }
-
-        // third, authenticate the user
-        final Subject user = authenticate(request, response);
-        if (user == null) {
-            // You now get a HTTP Authentication challenge if there is no user
-            return;
-        }
-
-        // fourth, process the request
-        try (final DBBroker broker = getPool().get(Optional.of(user));
-             final Txn transaction = getPool().getTransactionManager().beginTransaction()) {
-
-            try {
-                srvREST.doDelete(broker, transaction, path, request, response);
-                transaction.commit();
-
-            } catch (final Throwable t) {
-                transaction.abort();
-                throw t;
-            }
-
-
-        } catch (final PermissionDeniedException e) {
-            // If the current user is the Default User and they do not have permission
-            // then send a challenge request to prompt the client for a username/password.
-            // Else return a FORBIDDEN Error
-            if (user.equals(getDefaultUser())) {
-                getAuthenticator().sendChallenge(request, response);
-            } else {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN, e.getMessage());
-            }
-        } catch (final NotFoundException e) {
-            response.sendError(HttpServletResponse.SC_NOT_FOUND, e.getMessage());
-        } catch (final EXistException e) {
-            if (response.isCommitted()) {
-                throw new ServletException(e.getMessage(), e);
-            }
-            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
-        } catch (final Throwable e) {
-            getLog().error(e);
-            throw new ServletException("An unknown error occurred: " + e.getMessage(), e);
-        }
-    }
-
-    @Override
-    protected void doPost(final HttpServletRequest req, final HttpServletResponse response)
-            throws ServletException, IOException {
-        HttpServletRequest request = null;
-        try {
-            // For POST request, If we are logging the requests we must wrap
-            // HttpServletRequest in HttpServletRequestWrapper
-            // otherwise we cannot access the POST parameters from the content body
-            // of the request!!! - deliriumsky
-            final Descriptor descriptor = Descriptor.getDescriptorSingleton();
-            if (descriptor != null) {
-                if (descriptor.allowRequestLogging()) {
-                    request = new HttpServletRequestWrapper(() -> (String) getPool().getConfiguration().getProperty(Configuration.BINARY_CACHE_CLASS_PROPERTY), req, getFormEncoding());
-                } else {
-                    request = req;
-                }
-            } else {
-                request = req;
-            }
-
-            // first, adjust the path
-            String path = request.getPathInfo();
-            if (path == null) {
-                path = "";
-            } else {
-                path = adjustPath(request);
-            }
-
-            // second, perform descriptor actions
-            if (descriptor != null && !descriptor.requestsFiltered()) {
-                // logs the request if specified in the descriptor
-                descriptor.doLogRequestInReplayLog(request);
-
-                // map's the path if a mapping is specified in the descriptor
-                path = descriptor.mapPath(path);
-            }
-
-            // third, authenticate the user
-            final Subject user = authenticate(request, response);
-            if (user == null) {
-                // You now get a HTTP Authentication challenge if there is no user
-                return;
-            }
-
-            // fourth, process the request
-            try (final DBBroker broker = getPool().get(Optional.of(user));
-                 final Txn transaction = getPool().getTransactionManager().beginTransaction()) {
-
-                try {
-                    srvREST.doPost(broker, transaction, request, response, path);
-                    transaction.commit();
-
-                } catch (final Throwable t) {
-                    transaction.abort();
-                    throw t;
-                }
-
-            } catch (final PermissionDeniedException e) {
-                // If the current user is the Default User and they do not have permission
-                // then send a challenge request to prompt the client for a username/password.
-                // Else return a FORBIDDEN Error
-                if (user.equals(getDefaultUser())) {
-                    getAuthenticator().sendChallenge(request, response);
-                } else {
-                    response.sendError(HttpServletResponse.SC_FORBIDDEN, e.getMessage());
-                }
-            } catch (final EXistException e) {
-                if (response.isCommitted()) {
-                    throw new ServletException(e.getMessage(), e);
-                }
-                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
-            } catch (final BadRequestException e) {
-                if (response.isCommitted()) {
-                    throw new ServletException(e.getMessage(), e);
-                }
-                response.sendError(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
-            } catch (final NotFoundException e) {
-                if (response.isCommitted()) {
-                    throw new ServletException(e.getMessage(), e);
-                }
-                response.sendError(HttpServletResponse.SC_NOT_FOUND, e.getMessage());
-            } catch (final Throwable e) {
-                getLog().error(e);
-                throw new ServletException("An unknown error occurred: " + e.getMessage(), e);
-            }
-        } finally {
-            if (request instanceof HttpServletRequestWrapper) {
-                ((HttpServletRequestWrapper) request).close();
-            }
-        }
-    }
-
-    @Override
-    protected void service(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        final String method = req.getMethod();
-        if (method.equals("PATCH")) {
-            this.doPatch(req, resp);
-            return;
-        }
-        super.service(req, resp);
     }
 }
