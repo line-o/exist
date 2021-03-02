@@ -26,7 +26,6 @@ import org.apache.logging.log4j.Logger;
 import org.exist.EXistException;
 import org.exist.debuggee.DebuggeeFactory;
 import org.exist.dom.persistent.XMLUtil;
-import org.exist.http.Descriptor;
 import org.exist.security.AuthenticationException;
 import org.exist.security.Permission;
 import org.exist.security.PermissionDeniedException;
@@ -37,7 +36,6 @@ import org.exist.source.Source;
 import org.exist.source.SourceFactory;
 import org.exist.source.StringSource;
 import org.exist.storage.DBBroker;
-import org.exist.util.Configuration;
 import org.exist.util.MimeTable;
 import org.exist.util.serializer.XQuerySerializer;
 import org.exist.xmldb.XmldbURI;
@@ -164,29 +162,8 @@ public class XQueryServlet extends AbstractExistHttpServlet {
     }
 
     @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse response) throws ServletException, IOException {
-        HttpServletRequest request = null;
-        try {
-            //For POST request, If we are logging the requests we must wrap HttpServletRequest in HttpServletRequestWrapper
-            //otherwise we cannot access the POST parameters from the content body of the request!!! - deliriumsky
-            final Descriptor descriptor = Descriptor.getDescriptorSingleton();
-            if (descriptor != null) {
-                if (descriptor.allowRequestLogging()) {
-                    request = new HttpServletRequestWrapper(() -> (String) getPool().getConfiguration().getProperty(Configuration.BINARY_CACHE_CLASS_PROPERTY), req, getFormEncoding());
-                } else {
-                    request = req;
-                }
-
-            } else {
-                request = req;
-            }
-
-            process(request, response);
-        } finally {
-            if (request != null && request instanceof HttpServletRequestWrapper) {
-                ((HttpServletRequestWrapper)request).close();
-            }
-        }
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        process(request, response);
     }
     
     //-------------------------------
@@ -199,29 +176,8 @@ public class XQueryServlet extends AbstractExistHttpServlet {
     //-------------------------------
 
     @Override
-    protected void doPut(HttpServletRequest req, HttpServletResponse response) throws ServletException, IOException {
-        HttpServletRequest request = null;
-        try {
-            //For POST request, If we are logging the requests we must wrap HttpServletRequest in HttpServletRequestWrapper
-            //otherwise we cannot access the POST parameters from the content body of the request!!! - deliriumsky
-            final Descriptor descriptor = Descriptor.getDescriptorSingleton();
-            if (descriptor != null) {
-                if (descriptor.allowRequestLogging()) {
-                    request = new HttpServletRequestWrapper(() -> (String) getPool().getConfiguration().getProperty(Configuration.BINARY_CACHE_CLASS_PROPERTY), req, getFormEncoding());
-                } else {
-                    request = req;
-                }
-
-            } else {
-                request = req;
-            }
-
-            process(request, response);
-        } finally {
-            if (request != null && request instanceof HttpServletRequestWrapper) {
-                ((HttpServletRequestWrapper)request).close();
-            }
-        }
+    protected void doPut(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        process(request, response);
     }
 
     @Override
@@ -248,26 +204,10 @@ public class XQueryServlet extends AbstractExistHttpServlet {
                 {path = path.substring(0, p);}
             path = getServletContext().getRealPath(path);
         }
-        
-        //second, perform descriptor actions
-        final Descriptor descriptor = Descriptor.getDescriptorSingleton();
-        if(descriptor != null && !descriptor.requestsFiltered()) {
-            //logs the request if specified in the descriptor
-            descriptor.doLogRequestInReplayLog(request);
-            
-            //map's the path if a mapping is specified in the descriptor
-            path = descriptor.mapPath(path);
-        }
-        
-        
-//        if (request.getCharacterEncoding() == null)
-//            try {
-//                request.setCharacterEncoding(formEncoding);
-//            } catch (IllegalStateException e) {
-//            }
+
         final ServletOutputStream sout = response.getOutputStream();
         final PrintWriter output = new PrintWriter(new OutputStreamWriter(sout, getFormEncoding()));
-//        response.setContentType(contentType + "; charset=" + formEncoding);
+
         response.addHeader( "pragma", "no-cache" );
         response.addHeader( "Cache-Control", "no-cache" );
 
@@ -384,35 +324,8 @@ public class XQueryServlet extends AbstractExistHttpServlet {
                 allowSource = "yes".equals(option);
             
             //Should we display the source of the XQuery or execute it
-            if(allowSource && descriptor != null) {
-                //show the source
-                
-                //check are we allowed to show the xquery source - descriptor.xml
-//                System.out.println("path="+path);
-                if(descriptor.allowSource(path)) {
-                	
-                	try {
-						source.validate(user, Permission.READ);
-					} catch (final PermissionDeniedException e) {
-						if (getDefaultUser().equals(user)) {
-							getAuthenticator().sendChallenge(request, response);
-						} else {
-							response.sendError(HttpServletResponse.SC_FORBIDDEN, "Permission to view XQuery source for: " + path + " denied. (no read access)");
-						}
-						return;
-					}
-                    
-					//Show the source of the XQuery
-                    //writeResourceAs(resource, broker, stylesheet, encoding, "text/plain", outputProperties, response);
-                    response.setContentType("text/plain; charset=" + getFormEncoding());
-                    output.write(source.getContent());
-                    output.flush();
-                    return;
-                } else {
-                   
-                   response.sendError(HttpServletResponse.SC_FORBIDDEN, "Permission to view XQuery source for: " + path + " denied. Must be explicitly defined in descriptor.xml");
-                   return;
-                }
+            if(allowSource) {
+               response.sendError(HttpServletResponse.SC_FORBIDDEN, "Permission to view XQuery source for: " + path + " denied.");
             }
         }
         

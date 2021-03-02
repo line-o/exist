@@ -32,10 +32,6 @@ import org.apache.xmlrpc.server.XmlRpcHandlerMapping;
 import org.apache.xmlrpc.webserver.XmlRpcServlet;
 import org.apache.xmlrpc.webserver.XmlRpcServletServer;
 import org.exist.EXistException;
-import org.exist.http.Descriptor;
-import org.exist.http.servlets.HttpServletRequestWrapper;
-import org.exist.storage.BrokerPool;
-import org.exist.util.Configuration;
 
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletContext;
@@ -51,7 +47,6 @@ import java.util.List;
 import java.util.function.Predicate;
 
 import static com.evolvedbinary.j8fu.Either.*;
-import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 public class RpcServlet extends XmlRpcServlet {
 
@@ -82,41 +77,21 @@ public class RpcServlet extends XmlRpcServlet {
     @Override
     public void doPost(HttpServletRequest request, final HttpServletResponse response) throws IOException, ServletException {
         try {
-            // Request logger
-
-            final Descriptor descriptor = Descriptor.getDescriptorSingleton();
-            if (descriptor.allowRequestLogging() && !descriptor.requestsFiltered()) {
-                // Wrap HttpServletRequest, because both request Logger and xmlrpc
-                // need the request InputStream, which is consumed when read.
-                final String cacheClass = (String) BrokerPool.getInstance().getConfiguration().getProperty(Configuration.BINARY_CACHE_CLASS_PROPERTY);
-                request =
-                        new HttpServletRequestWrapper(() -> cacheClass, request, /*formEncoding*/ charset != null ? charset.displayName() : ISO_8859_1.displayName());
-                descriptor.doLogRequestInReplayLog(request);
+            if (charset != null) {
+                response.setCharacterEncoding(charset.displayName());
             }
-
-            try {
-                if (charset != null) {
-                    response.setCharacterEncoding(charset.displayName());
-                }
-                super.doPost(request, response);
-            } catch (final Throwable e) {
-                LOG.error("Problem during XmlRpc execution", e);
-                final String exceptionMessage;
-                if (e instanceof XmlRpcException) {
-                    final Throwable linkedException = ((XmlRpcException) e).linkedException;
-                    LOG.error(linkedException.getMessage(), linkedException);
-                    exceptionMessage = "An error occurred: " + e.getMessage() + ": " + linkedException.getMessage();
-                } else {
-                    exceptionMessage = "An unknown error occurred: " + e.getMessage();
-                }
-                throw new ServletException(exceptionMessage, e);
+            super.doPost(request, response);
+        } catch (final Throwable e) {
+            LOG.error("Problem during XmlRpc execution", e);
+            final String exceptionMessage;
+            if (e instanceof XmlRpcException) {
+                final Throwable linkedException = ((XmlRpcException) e).linkedException;
+                LOG.error(linkedException.getMessage(), linkedException);
+                exceptionMessage = "An error occurred: " + e.getMessage() + ": " + linkedException.getMessage();
+            } else {
+                exceptionMessage = "An unknown error occurred: " + e.getMessage();
             }
-        } catch (final EXistException e) {
-            throw new ServletException(e);
-        } finally {
-            if (request != null && request instanceof HttpServletRequestWrapper) {
-                ((HttpServletRequestWrapper)request).close();
-            }
+            throw new ServletException(exceptionMessage, e);
         }
     }
 

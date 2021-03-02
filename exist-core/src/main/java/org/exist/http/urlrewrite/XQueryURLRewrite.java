@@ -31,7 +31,6 @@ import org.exist.collections.Collection;
 import org.exist.dom.persistent.BinaryDocument;
 import org.exist.dom.persistent.DocumentImpl;
 import org.exist.dom.persistent.LockedDocument;
-import org.exist.http.Descriptor;
 import org.exist.http.servlets.Authenticator;
 import org.exist.http.servlets.BasicAuthenticator;
 import org.exist.http.servlets.HttpRequestWrapper;
@@ -156,17 +155,6 @@ public class XQueryURLRewrite extends HttpServlet {
 
         if (LOG.isTraceEnabled()) {
             LOG.trace(request.getRequestURI());
-        }
-
-        final Descriptor descriptor = Descriptor.getDescriptorSingleton();
-        if (descriptor != null && descriptor.requestsFiltered()) {
-            final String attr = (String) request.getAttribute("XQueryURLRewrite.forwarded");
-            if (attr == null) {
-                //logs the request if specified in the descriptor
-                descriptor.doLogRequestInReplayLog(request);
-
-                request.setAttribute("XQueryURLRewrite.forwarded", "true");
-            }
         }
 
         Subject user = defaultUser;

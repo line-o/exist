@@ -468,48 +468,23 @@ public class RESTServer {
             // found an XQuery or XProc resource, fixup request values
             final String pathInfo = pathUri.trimFromBeginning(servletPath).toString();
 
-            // Should we display the source of the XQuery or XProc or execute it
-            final Descriptor descriptor = Descriptor.getDescriptorSingleton();
             if (source) {
                 // show the source
 
                 // check are we allowed to show the xquery source -
                 // descriptor.xml
-                if ((null != descriptor)
-                        && descriptor.allowSource(path)
-                        && resource.getPermissions().validate(
-                        broker.getCurrentSubject(), Permission.READ)) {
 
-                    // TODO: change writeResourceAs to use a serializer
-                    // that will serialize xquery to syntax coloured
-                    // xhtml, replace the asMimeType parameter with a
-                    // method for specifying the serializer, or split
-                    // the code into two methods. - deliriumsky
-
-                    if (xquery_mime_type.equals(resource.getMimeType())) {
-                        // Show the source of the XQuery
-                        writeResourceAs(resource, broker, transaction, stylesheet, encoding,
-                                MimeType.TEXT_TYPE.getName(), outputProperties,
-                                request, response);
-                    } else if (xproc_mime_type.equals(resource.getMimeType())) {
-                        // Show the source of the XProc
-                        writeResourceAs(resource, broker, transaction, stylesheet, encoding,
-                                MimeType.XML_TYPE.getName(), outputProperties,
-                                request, response);
-                    }
-                } else {
-                    // we are not allowed to show the source - query not
-                    // allowed in descriptor.xml
-                    // or descriptor not found, so assume source view not
-                    // allowed
-                    response
-                            .sendError(
-                            HttpServletResponse.SC_FORBIDDEN,
-                            "Permission to view XQuery source for: "
-                            + path
-                            + " denied. Must be explicitly defined in descriptor.xml");
-                    return;
-                }
+                // we are not allowed to show the source - query not
+                // allowed in descriptor.xml
+                // or descriptor not found, so assume source view not
+                // allowed
+                response
+                        .sendError(
+                        HttpServletResponse.SC_FORBIDDEN,
+                        "Permission to view XQuery source for: "
+                        + path
+                        + " denied. Must be explicitly defined in descriptor.xml");
+                return;
             } else {
                 try {
                     if (xquery_mime_type.equals(resource.getMimeType())) {

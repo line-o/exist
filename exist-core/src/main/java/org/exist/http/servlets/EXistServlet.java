@@ -24,8 +24,6 @@ package org.exist.http.servlets;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.exist.EXistException;
-import org.exist.collections.Collection;
-import org.exist.http.Descriptor;
 import org.exist.http.RESTServer;
 import org.exist.http.NotFoundException;
 import org.exist.http.BadRequestException;
@@ -34,9 +32,7 @@ import org.exist.security.PermissionDeniedException;
 import org.exist.security.Subject;
 import org.exist.storage.DBBroker;
 import org.exist.storage.txn.Txn;
-import org.exist.util.Configuration;
 import org.exist.validation.XmlLibraryChecker;
-import org.exist.xmldb.XmldbURI;
 
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
@@ -157,18 +153,6 @@ public class EXistServlet extends AbstractExistHttpServlet {
 
         // first, adjust the path
         String path = adjustPath(request);
-
-//        // second, perform descriptor actions
-//        final Descriptor descriptor = Descriptor.getDescriptorSingleton();
-//        if (descriptor != null && !descriptor.requestsFiltered()) {
-//            // logs the request if specified in the descriptor
-//            if (method.equals("GET") || method.equals("POST") || method.equals("DELETE")) {
-//                descriptor.doLogRequestInReplayLog(request);
-//            }
-//
-//            // map's the path if a mapping is specified in the descriptor
-//            path = descriptor.mapPath(path);
-//        }
 
         // third, authenticate the user
         final Subject user = authenticate(request, response);
