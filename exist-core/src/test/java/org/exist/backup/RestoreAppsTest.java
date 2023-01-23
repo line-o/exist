@@ -29,6 +29,7 @@ import org.exist.storage.BrokerPool;
 import org.exist.storage.DBBroker;
 import org.exist.storage.txn.Txn;
 import org.exist.test.ExistEmbeddedServer;
+import org.exist.xquery.XPathException;
 import org.expath.pkg.repo.*;
 import org.expath.pkg.repo.tui.BatchUserInteraction;
 import org.junit.ClassRule;
@@ -62,6 +63,15 @@ public class RestoreAppsTest {
             "    <description>Backup Test App</description>\n" +
             "    <type>application</type>\n" +
             "    <target>backup-test</target>\n" +
+            "</meta>";
+
+    private static final String REPO_XML_APP_WITH_DEPENDENCIES =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+            "<meta xmlns=\"http://exist-db.org/xquery/repo\">\n" +
+            "    <description>Backup Test App</description>\n" +
+            "    <type>application</type>\n" +
+            "    <target>backup-test-with-dependencies</target>\n" +
+            "    <target>backup-test-with-dependencies</target>\n" +
             "</meta>";
 
     private static final String REPO_XML_LIB =
@@ -245,7 +255,7 @@ public class RestoreAppsTest {
         return backup;
     }
 
-    private void createAndInstallApp(String version, String repoDescriptor) throws IOException, PackageException, EXistException {
+    private void createAndInstallApp(String version, String repoDescriptor) throws XPathException, IOException, PackageException, EXistException {
         String descriptor =
                 "<package xmlns=\"http://expath.org/ns/pkg\" name=\"http://existsolutions.com/apps/backup-test\"\n" +
                 "   abbrev=\"backup-test\" version=\"" + version + "\" spec=\"1.0\">\n" +

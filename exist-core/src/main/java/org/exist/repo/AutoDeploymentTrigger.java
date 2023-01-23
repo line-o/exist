@@ -27,6 +27,7 @@ import org.exist.storage.DBBroker;
 import org.exist.storage.StartupTrigger;
 import org.exist.storage.txn.Txn;
 import org.exist.util.FileUtils;
+import org.exist.xquery.XPathException;
 import org.expath.pkg.repo.PackageException;
 import org.expath.pkg.repo.XarFileSource;
 
@@ -114,7 +115,7 @@ public class AutoDeploymentTrigger implements StartupTrigger {
             final PackageLoader loader = (name, version) -> {
                 // TODO: enforce version check
                 final Path p = packages.get(name);
-                if(p == null) {
+                if (p == null) {
                     return null;
                 }
                 return new XarFileSource(p);
@@ -123,7 +124,7 @@ public class AutoDeploymentTrigger implements StartupTrigger {
             for (final Path xar : xars) {
                 try {
                     deployment.installAndDeploy(sysBroker, transaction, new XarFileSource(xar), loader, false);
-                } catch (final PackageException | IOException e) {
+                } catch (final XPathException | PackageException | IOException e) {
                     LOG.error("Exception during deployment of app {}: {}", FileUtils.fileName(xar), e.getMessage(), e);
                     sysBroker.getBrokerPool().reportStatus("An error occurred during app deployment: " + e.getMessage());
                 }

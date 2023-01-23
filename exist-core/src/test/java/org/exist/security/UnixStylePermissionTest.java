@@ -44,6 +44,7 @@ import org.junit.runner.RunWith;
 /**
  *
  * @author <a href="mailto:adam@exist-db.org">Adam Retter</a>
+ * @author <a href="mailto:github@line-o.de">Juri Leino</a>
  */
 @SuppressWarnings("OctalInteger")
 @RunWith(ParallelRunner.class)

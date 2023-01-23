@@ -74,7 +74,7 @@ public class ExistPkgExtension
             // position to </package>
             parser.next();
         } catch (final XMLStreamException ex) {
-            throw new PackageException("Error reading the exist descriptor", ex);
+            throw new PackageParseException("Error reading the exist descriptor", ex);
         }
         pkg.addInfo(getName(), info);
         // if the package has never been installed, install it now
@@ -102,7 +102,7 @@ public class ExistPkgExtension
         } else if ("xquery".equals(local)) {
             handleXQuery(parser, pkg, info);
         } else {
-            throw new PackageException("Unknown eXist component type: " + local);
+            throw new PackageParseException("Unknown eXist component type: " + local);
         }
     }
 
@@ -118,7 +118,7 @@ public class ExistPkgExtension
         try {
             info.addJava(new URI(href), clazz);
         } catch (final URISyntaxException ex) {
-            throw new PackageException("Invalid URI: " + href, ex);
+            throw new PackageParseException("Invalid URI: " + href, ex);
         }
     }
 
@@ -136,7 +136,7 @@ public class ExistPkgExtension
         try {
             info.addXQuery(new URI(href), file);
         } catch (final URISyntaxException ex) {
-            throw new PackageException("Invalid URI: " + href, ex);
+            throw new PackageParseException("Invalid URI: " + href, ex);
         }
     }
 
@@ -166,7 +166,7 @@ public class ExistPkgExtension
                     jar_src = res.resolveComponent(jar);
                 } catch (final NotExistException ex) {
                     final String msg = "Inconsistent package descriptor, the JAR file is not in the package: ";
-                    throw new PackageException(msg + jar, ex);
+                    throw new PackageParseException(msg + jar, ex);
                 }
                 final URI uri = URI.create(jar_src.getSystemId());
                 final Path file = Paths.get(uri);

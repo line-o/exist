@@ -42,8 +42,8 @@ public class ExpathPackageModule extends AbstractInternalModule {
     private final static Logger logger = LogManager.getLogger(ExpathPackageModule.class);
 
     public final static String NAMESPACE_URI = "http://exist-db.org/xquery/repo";
-
     public final static String PREFIX = "repo";
+
     public final static String INCLUSION_DATE = "2010-07-27";
     public final static String RELEASED_IN_VERSION = "eXist-2.0";
     

@@ -34,6 +34,7 @@ import org.exist.util.SyntaxException;
  * can be used in a local or remote scenario
  *
  * @author <a href="mailto:adam@exist-db.org">Adam Retter</a>
+ * @author <a href="mailto:github@line-o.de">Juri Leino</a>
  */
 public abstract class AbstractUnixStylePermission implements Permission {
 

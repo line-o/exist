@@ -23,6 +23,7 @@ package org.exist.xquery.modules.expathrepo;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -39,6 +40,7 @@ import org.exist.dom.memtree.MemTreeBuilder;
 import org.exist.dom.persistent.LockedDocument;
 import org.exist.repo.Deployment;
 import org.exist.repo.PackageLoader;
+import org.exist.repo.RepoErrorCode;
 import org.exist.security.PermissionDeniedException;
 import org.exist.storage.lock.Lock.LockMode;
 import org.exist.storage.txn.TransactionException;
@@ -51,6 +53,7 @@ import org.expath.pkg.repo.PackageException;
 import org.expath.pkg.repo.XarFileSource;
 import org.expath.pkg.repo.XarSource;
 import org.xml.sax.helpers.AttributesImpl;
+import sun.net.ConnectionResetException;
 
 public class Deploy extends BasicFunction {
 
@@ -144,10 +147,11 @@ public class Deploy extends BasicFunction {
 	@Override
 	public Sequence eval(final Sequence[] args, final Sequence contextSequence)
 			throws XPathException {
-		if (!context.getSubject().hasDbaRole())
-			throw new XPathException(this, EXPathErrorCode.EXPDY003, "Permission denied. You need to be a member " +
+		if (!context.getSubject().hasDbaRole()) {
+			throw new XPathException(this, RepoErrorCode.PERMISSION_DENIED, "Permission denied. You need to be a member " +
 					"of the dba group to use repo:deploy/undeploy");
-		
+        }
+
 		final String pkgName = args[0].getStringValue();
         try {
             Deployment deployment = new Deployment();
@@ -189,10 +193,10 @@ public class Deploy extends BasicFunction {
                     transaction.commit();
                 }
 	        }
-	        target.orElseThrow(() -> new XPathException(this, "expath repository is not available."));
+	        target.orElseThrow(() -> new XPathException(this, RepoErrorCode.INSTALLATION, "expath repository is not available."));
             return statusReport(target);
         } catch (PackageException e) {
-            throw new XPathException(this, EXPathErrorCode.EXPDY001, e.getMessage(), args[0], e);
+            throw new XPathException(this, RepoErrorCode.NOT_FOUND, e.getMessage(), args[0], e);
         } catch (IOException e) {
             throw new XPathException(this, ErrorCodes.FOER0000, "Caught IO error while deploying expath archive", args[0], e);
         } catch (TransactionException e) {
@@ -202,18 +206,18 @@ public class Deploy extends BasicFunction {
 
     private Optional<String> installAndDeploy(final Txn transaction, final String pkgName, final String version, final String repoURI) throws XPathException {
         try {
-            final RepoPackageLoader loader = new RepoPackageLoader(repoURI);
+            final RepoPackageLoader loader = new RepoPackageLoader(this, repoURI);
             final Deployment deployment = new Deployment();
             final XarSource xar = loader.load(pkgName, new PackageLoader.Version(version, false));
             if (xar != null) {
                 return deployment.installAndDeploy(context.getBroker(), transaction, xar, loader);
             }
             return Optional.empty();
-        } catch (final MalformedURLException e) {
-            throw new XPathException(this, EXPathErrorCode.EXPDY005, "Malformed URL: " + repoURI);
+        } catch (final MalformedURLException | ClassCastException e) {
+            throw new XPathException(this, RepoErrorCode.BAD_REPO_URL, "Malformed URL: " + repoURI);
         } catch (final PackageException | IOException e) {
             LOG.error(e.getMessage(), e);
-            throw new XPathException(this, EXPathErrorCode.EXPDY007, e.getMessage());
+            throw new XPathException(this, RepoErrorCode.INSTALLATION, e.getMessage());
         }
     }
 
@@ -221,25 +225,36 @@ public class Deploy extends BasicFunction {
         final XmldbURI docPath = XmldbURI.createInternal(path);
         try(final LockedDocument lockedDoc = context.getBroker().getXMLResource(docPath, LockMode.READ_LOCK)) {
             if(lockedDoc == null) {
-                throw new XPathException(this, EXPathErrorCode.EXPDY001, path + " no such .xar", new StringValue(this, path));
+                throw new XPathException(this, RepoErrorCode.NOT_FOUND, path + " no such .xar",
+                        new StringValue(path));
             }
 
             final DocumentImpl doc = lockedDoc.getDocument();
             if (doc.getResourceType() != DocumentImpl.BINARY_FILE) {
-                throw new XPathException(this, EXPathErrorCode.EXPDY001, path + " is not a valid .xar", new StringValue(this, path));
+                throw new XPathException(this, RepoErrorCode.NOT_FOUND, path + " is not a valid .xar",
+                        new StringValue(path));
             }
 
             RepoPackageLoader loader = null;
             if (repoURI != null) {
-                loader = new RepoPackageLoader(repoURI);
+                loader = new RepoPackageLoader(this, repoURI);
             }
 
             final XarSource xarSource =  new BinaryDocumentXarSource(context.getBroker().getBrokerPool(), transaction, (BinaryDocument)doc);
             final Deployment deployment = new Deployment();
             return deployment.installAndDeploy(context.getBroker(), transaction, xarSource, loader);
-        } catch (PackageException | IOException | PermissionDeniedException e) {
+        } catch (final PermissionDeniedException e) {
             LOG.error(e.getMessage(), e);
-            throw new XPathException(this, EXPathErrorCode.EXPDY007, "Package installation failed: " + e.getMessage(), new StringValue(this, e.getMessage()));
+            throw new XPathException(this, RepoErrorCode.PERMISSION_DENIED, e.getMessage());
+        } catch (PackageException e) {
+            final String msg = e.getMessage();
+            LOG.error(msg, e);
+            throw new XPathException(this, RepoErrorCode.PARSE_DESCRIPTOR, e.getMessage());
+        } catch (IOException e) {
+            final String msg = e.getMessage();
+            LOG.error(msg, e);
+            throw new XPathException(this, RepoErrorCode.INSTALLATION, e.getMessage(),
+                    new StringValue(e.getMessage()));
         }
     }
 
@@ -271,38 +286,64 @@ public class Deploy extends BasicFunction {
 
     private static class RepoPackageLoader implements PackageLoader {
 
+        private final Expression expr;
         private final String repoURL;
+        private final String processorVersion;
 
-        public RepoPackageLoader(final String repoURL) {
+        public RepoPackageLoader(final Expression expr, final String repoURL) {
+            this.expr = expr;
             this.repoURL = repoURL;
+            this.processorVersion = SystemProperties.getInstance()
+                    .getSystemProperty("product-version", "2.2.0");
+        }
+
+        private String getQuery (final String name, final Version version) throws XPathException {
+            try {
+                final String query = "?name=" + URLEncoder.encode(name, "UTF-8") + "&processor=" + processorVersion;
+
+                // query list of exact versions
+                if (version.getVersions() != null) {
+                    return query +
+                            "&version=" + URLEncoder.encode(version.getVersions(), "UTF-8");
+                }
+                // query semver
+                if (version.getSemVer() != null) {
+                    return query +
+                            "&semver=" + version.getSemVer();
+                }
+                // query range
+                final String min = version.getMin() == null ? "" : "&semver-min=" + version.getMin();
+                final String max = version.getMax() == null ? "" : "&semver-max=" + version.getMax();
+                return query + min + max;
+            } catch (UnsupportedEncodingException e) {
+                throw new XPathException(expr, RepoErrorCode.BAD_REPO_URL, e.getMessage());
+            }
+        }
+
+        private HttpURLConnection connect(final String query) throws XPathException {
+            try {
+                final URL url = new URI(repoURL + query).toURL();
+                final HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setConnectTimeout(15 * 1000);
+                connection.setReadTimeout(15 * 1000);
+                connection.setRequestMethod("GET");
+                connection.setRequestProperty("User-Agent", "eXist-db (" + processorVersion + ")");
+                connection.connect();
+                return connection;
+            } catch (URISyntaxException | ClassCastException e) {
+                throw new XPathException(expr, RepoErrorCode.BAD_REPO_URL, e.getMessage());
+            } catch (IOException e) {
+                throw new XPathException(expr, RepoErrorCode.REPO_CONNECTION, "Failed to connect to " + repoURL,
+                        new StringValue(query));
+            }
         }
 
         @Override
-        public XarSource load(final String name, final Version version) throws IOException {
-            String pkgURL = repoURL + "?name=" + URLEncoder.encode(name, "UTF-8") +
-                "&processor=" + SystemProperties.getInstance().getSystemProperty("product-version", "2.2.0");
-            if (version != null) {
-                if (version.getMin() != null) {
-                    pkgURL += "&semver-min=" + version.getMin();
-                }
-                if (version.getMax() != null) {
-                    pkgURL += "&semver-max=" + version.getMax();
-                }
-                if (version.getSemVer() != null) {
-                    pkgURL += "&semver=" + version.getSemVer();
-                }
-                if (version.getVersion() != null) {
-                    pkgURL += "&version=" + URLEncoder.encode(version.getVersion(), "UTF-8");
-                }
-            }
-            LOG.info("Retrieving package from {}", pkgURL);
-            final HttpURLConnection connection = (HttpURLConnection) new URL(pkgURL).openConnection();
-            connection.setConnectTimeout(15 * 1000);
-            connection.setReadTimeout(15 * 1000);
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows; U; Windows NT 6.0; en-US; rv:1.9.1.2) " +
-                    "Gecko/20090729 Firefox/3.5.2 (.NET CLR 3.5.30729)");
-            connection.connect();
+        public XarSource load(final String name, final Version version) throws XPathException {
+            final String query = getQuery(name, version);
+            LOG.info("Retrieving package {} from {}", name, repoURL);
+            LOG.debug("Package repository query {}", query);
+            final HttpURLConnection connection = connect(query);
 
             // TODO(AR) we likely don't need temporary caching here! could just use UriXarSource
             try(final InputStream is = connection.getInputStream()) {
@@ -311,7 +352,9 @@ public class Deploy extends BasicFunction {
                 Files.copy(is, outFile, StandardCopyOption.REPLACE_EXISTING);
                 return new XarFileSource(outFile);
             } catch (IOException e) {
-                throw new IOException("Failed to install dependency from " + pkgURL + ": " + e.getMessage());
+                throw new XPathException(expr, RepoErrorCode.NOT_FOUND,
+                        "Failed to resolve package " + name + " " + version + " from " + repoURL,
+                        new StringValue("name:" + name + " version:" + version + " query:" + query));
             }
         }
     }

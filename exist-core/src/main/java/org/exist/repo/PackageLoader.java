@@ -21,12 +21,12 @@
  */
 package org.exist.repo;
 
+import org.exist.xquery.XPathException;
 import org.expath.pkg.repo.PackageException;
 import org.expath.pkg.repo.XarSource;
 import org.expath.pkg.repo.deps.DependencyVersion;
 
 import javax.annotation.Nullable;
-import java.io.IOException;
 
 /**
  * Interface for resolving package dependencies. Implementations may load
@@ -38,12 +38,12 @@ public interface PackageLoader {
      * Wrapper for the different version schemes supported by
      * the expath spec.
      */
-    public static class Version {
+    class Version {
 
         String min = null;
         String max = null;
         String semVer = null;
-        String version = null;
+        String versions = null;
 
         public String getMin() {
             return min;
@@ -57,36 +57,65 @@ public interface PackageLoader {
             return semVer;
         }
 
-        public String getVersion() {
-            return version;
+        public String getVersions() {
+            return versions;
         }
 
         public DependencyVersion getDependencyVersion() throws PackageException {
-            return DependencyVersion.makeVersion(version, semVer, min, max);
+            return DependencyVersion.makeVersion(versions, semVer, min, max);
         }
 
         public String toString() {
-            StringBuilder v = new StringBuilder();
-            if (min != null) {
-                v.append("> ").append(min);
-            }
-            if (max != null) {
-                v.append(" < ").append(max);
+            if (versions != null) {
+                return versions;            // space separated version list
             }
             if (semVer != null) {
-                v.append(semVer);
+                return semVer;              // equal to SemVer template
             }
-            if (version != null) {
-                v.append(version);
+            if (min != null && max != null) {
+                return min + "-" + max;     // SemVer range
             }
-            return v.toString();
+            if (min != null) {
+                return ">=" + min;          // greater than or equal to SemVer template
+            }
+            if (max != null) {
+                return "<=" + max;          // less than or equal to SemVer template
+            }
+
+            return "*";                     // any version
+        }
+
+        /**
+         * values are exclusive except min and max
+         */
+        public Version(
+                @Nullable final String versions,
+                @Nullable final String semVer,
+                @Nullable final String min,
+                @Nullable final String max
+        ) {
+            if (versions != null && !versions.isEmpty()) {
+                this.versions = versions;
+                return;
+            }
+            if (semVer != null && !semVer.isEmpty()) {
+                this.semVer = semVer;
+                return;
+            }
+            if (min != null && !min.isEmpty()) {
+                this.min = min;
+            }
+            if (max != null && !max.isEmpty()) {
+                this.max = max;
+            }
         }
 
         public Version(String version, boolean semver) {
-            if (semver)
-                {this.semVer = version;}
-            else
-                {this.version = version;}
+            if (semver) {
+                this.semVer = version;
+            } else {
+                this.versions = version;
+            }
         }
 
         public Version(String min, String max) {
@@ -98,11 +127,11 @@ public interface PackageLoader {
     /**
      * Locate the expath package identified by name.
      *
-     * @param name unique name of the package
+     * @param name    unique name of the package
      * @param version the version to install
      * @return a file containing the package or null if not found
-     * @throws IOException in case of an io error locating the package
+     * @throws XPathException in case the package cannot be located
      */
     @Nullable
-    XarSource load(String name, Version version) throws IOException;
+    XarSource load(String name, Version version) throws XPathException;
 }
