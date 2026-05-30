@@ -785,6 +785,8 @@
                             <goal>resolve</goal>
                         </goals>
                         <configuration>
+                            <!-- you can force loading of XARs by uncommenting the line below -->
+                            <!-- <cache>false</cache> -->
                             <repoUri>${public.xar.repo.uri}</repoUri>
                             <outputDirectory>${expath.pkg.dir}</outputDirectory>
                             <existDbVersion>${project.version}</existDbVersion>
